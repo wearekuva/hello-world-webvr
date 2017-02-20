@@ -223,11 +223,7 @@
 
         controls.update();
 
-        if ( WEBVR.isAvailable() ) {
-          effect.render( scene, camera );
-        } else {
-          renderer.render( scene, camera );
-        }
+        effect.render( scene, camera );
 
         renderer.shadowMap.autoUpdate = false;
 
