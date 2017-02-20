@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>Kuva - Hello World WebVR</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+
+    <!-- Origin Trial Token, feature = WebVR, origin = https://kuva.io, expires = 2017-03-31 -->
+    <meta http-equiv="origin-trial" data-feature="WebVR" data-expires="2017-03-31" content="AtdHmHlkM0L1j8YmCAdYeRvngECBXcUx12zX1aC8Xq+H3YY0aikRLc+3pqvK++ZXhh8lopTWZTaePnF5VKUEqAQAAABZeyJvcmlnaW4iOiJodHRwczovL2t1dmEuaW86NDQzIiwiZmVhdHVyZSI6IldlYlZSIiwiZXhwaXJ5IjoxNDkwOTczMDU4LCJpc1N1YmRvbWFpbiI6dHJ1ZX0=">
+
+    <link href="https://fonts.googleapis.com/css?family=Roboto|Roboto+Slab" rel="stylesheet">
+    <link rel="stylesheet" href="css/normalize.css">
+    <link rel="stylesheet" href="css/main.css">
+  </head>
+  <body>
+    <script>
+      /**
+      WebVR PolyFill
+      */
+      var WebVRConfig = {
+        CARDBOARD_UI_DISABLED: true,
+        BUFFER_SCALE: 0.75
+      };
+    </script>
+    <script src="js/three.min.js"></script>
+    <script src="js/controls/VRControls.js"></script>
+    <script src="js/controls/OrbitControls.js"></script>
+    <script src="js/effects/VREffect.js"></script>
+    <script src="js/vr/WebVR.js"></script>
+    <script src="js/webvr-polyfill.min.js"></script>
+    <script>
+
+      if ( WEBVR.isAvailable() === false ) {
+
+        document.body.appendChild( WEBVR.getMessage() );
+
+      }
+
+      var container;
+      var camera, scene, raycaster, renderer;
+      var effect, controls;
+
+      var floor;
+      var boxes = [];
+
+      var pointLight;
+      var baseMaterial;
+      var activeMaterial;
+      var activeRatio = 0;
+
+      var intersectedObject;
+      var crosshair;
+
+      var BOX_COUNT = 120;
+      var BOX_ACTIVE_COLORS = [0x7a1010, 0x00f6ff, 0xf6ff00];
+
+      init();
+      animate();
+
+      function init() {
+
+        container = document.createElement( 'div' );
+        document.body.appendChild( container );
+
+        scene = new THREE.Scene();
+        scene.fog = new THREE.Fog(0x50707, 3, 6);
+
+        camera = new THREE.PerspectiveCamera( 70, window.innerWidth / window.innerHeight, 0.1, 15 );
+        scene.add( camera );
+
+        crosshair = new THREE.Mesh(
+          new THREE.RingGeometry( 0.02, 0.04, 32 ),
+          new THREE.MeshBasicMaterial( {
+            color: 0xffffff,
+            opacity: 0.3,
+            transparent: true,
+            depthTest: false,
+            depthWrite: false
+          } )
+        );
+        crosshair.position.z = -2;
+        crosshair.renderOrder = 10;
+        camera.add( crosshair );
+
+        floor = new THREE.Mesh(new THREE.CircleBufferGeometry(8, 64), new THREE.MeshStandardMaterial({
+          color: 0xffffff,
+          roughness: 0.76,
+          metalness: 0
+        }));
+        floor.rotation.x = -Math.PI / 2;
+        floor.position.y = -1.6;
+        floor.castShadow = false;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        var light = new THREE.DirectionalLight( 0xfffffd, 0.3 );
+        light.position.set( 4.22, 13.37, 7.5 );
+        light.castShadow = true;
+        light.shadow.camera.near = 1;
+        light.shadow.camera.far = 20;
+        light.shadow.camera.right = 4;
+        light.shadow.camera.left = -4;
+        light.shadow.camera.top  = 4;
+        light.shadow.camera.bottom = -4;
+        light.shadow.mapSize.width = 2048;
+        light.shadow.mapSize.height = 2048;
+        scene.add( light );
+
+        pointLight = new THREE.PointLight(0xffffff, 1, 6, 1);
+        scene.add( pointLight );
+
+        var geometry = new THREE.BoxGeometry( 0.3, 0.3, 0.3 );
+        baseMaterial = new THREE.MeshStandardMaterial({
+          roughness: 1,
+          metalness: 0,
+          color: 0xffffff
+        });
+        activeMaterial = new THREE.MeshStandardMaterial({
+          roughness: 1,
+          metalness: 0,
+          color: 0xffffff,
+          emissive: 0xffffff,
+          emissiveIntensity: 1
+        });
+
+
+        for ( var i = 0; i < BOX_COUNT; i ++ ) {
+
+          var object = new THREE.Mesh(geometry, baseMaterial);
+
+          // http://mathworld.wolfram.com/SpherePointPicking.html
+          var x0 = Math.random() * 2 - 1;
+          var x1 = Math.random() * 2 - 1;
+          var x2 = Math.random() * 2 - 1;
+          var x3 = Math.random() * 2 - 1;
+          var radius = Math.random() * 1 + 2;
+          var weight = radius / (x0 * x0 + x1 * x1 + x2 * x2 + x3 * x3);
+
+          object.position.set(
+            object.position.x = 2 * (x1 * x3 + x0 * x2) * weight,
+            object.position.y = 2 * (x2 * x3 - x0 * x1) * weight,
+            object.position.z = (x0 * x0 + x3 * x3 - x1 * x1 - x2 * x2) * weight
+          );
+
+          object.position.y = Math.max(-1.4, object.position.y);
+
+          object.rotation.x = Math.random() * Math.PI * 2;
+          object.rotation.y = Math.random() * Math.PI * 2;
+          object.rotation.z = Math.random() * Math.PI * 2;
+
+          object.castShadow = true;
+          object.receiveShadow = true;
+
+          boxes[i] = object;
+          scene.add( object );
+
+        }
+
+        raycaster = new THREE.Raycaster();
+
+        renderer = new THREE.WebGLRenderer( { antialias: false } );
+        renderer.setClearColor( 0x50707 );
+        renderer.setPixelRatio( window.devicePixelRatio );
+        renderer.setSize( window.innerWidth, window.innerHeight );
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFShadowMap;
+        container.appendChild( renderer.domElement );
+
+        if ( WEBVR.isAvailable() ) {
+          controls = new THREE.VRControls( camera );
+          effect = new THREE.VREffect( renderer );
+          navigator.getVRDisplays()
+            .then( function ( displays ) {
+              effect.setVRDisplay( displays[ 0 ] );
+              controls.setVRDisplay( displays[ 0 ] );
+            } )
+            .catch( function () {
+              // no displays
+            } );
+
+          document.body.appendChild( WEBVR.getButton( effect ) );
+
+        } else {
+          controls = new THREE.OrbitControls( camera, renderer.domElement );
+          controls.minDistance = 0;
+          controls.maxDistance = 0.0001;
+          controls.position0.z = 0.0001;
+          controls.rotateSpeed = -1;
+          controls.reset();
+        }
+
+        window.addEventListener( 'resize', onWindowResize, false );
+
+      }
+
+      function onWindowResize() {
+
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+
+        if ( WEBVR.isAvailable() ) {
+          effect.setSize( window.innerWidth, window.innerHeight );
+        } else {
+          renderer.setSize( window.innerWidth, window.innerHeight );
+        }
+      }
+
+      function animate() {
+
+        if ( WEBVR.isAvailable() ) {
+          effect.requestAnimationFrame( animate );
+        } else {
+          window.requestAnimationFrame( animate );
+        }
+        render();
+
+      }
+
+      function render() {
+
+        raycaster.setFromCamera( { x: 0, y: 0 }, camera );
+
+        var intersects = raycaster.intersectObjects( boxes );
+
+        if ( intersects.length > 0 ) {
+
+          if ( (activeRatio < 0.01) || (intersectedObject != intersects[ 0 ].object )) {
+
+            if (intersectedObject) {
+              intersectedObject.scale.set(1, 1, 1);
+              intersectedObject.material = baseMaterial;
+            }
+
+            intersectedObject = intersects[ 0 ].object;
+            intersectedObject.material = activeMaterial;
+            intersectedObject.material.emissive.setHex(BOX_ACTIVE_COLORS[BOX_ACTIVE_COLORS.length * Math.random() | 0]);
+            pointLight.color.copy(intersectedObject.material.emissive);
+            pointLight.position.copy(intersectedObject.position);
+            activeRatio = 1;
+
+          }
+
+        }
+
+        if (intersectedObject) {
+          var scale = 1 + activeRatio;
+          intersectedObject.scale.set(scale, scale, scale);
+          intersectedObject.material.emissiveIntensity = activeRatio * 4;
+        }
+        pointLight.intensity = activeRatio * 2;
+        activeRatio *= 0.95;
+
+        controls.update();
+
+        if ( WEBVR.isAvailable() ) {
+          effect.render( scene, camera );
+        } else {
+          renderer.render( scene, camera );
+        }
+
+        renderer.shadowMap.autoUpdate = false;
+
+      }
+
+    </script>
+  </body>
+</html>
